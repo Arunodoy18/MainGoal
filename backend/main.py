@@ -27,7 +27,9 @@ DATA_SHEET = "Master_FAST"
 
 origins = [
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "https://praana-lbp.netlify.app",  # your actual Netlify URL
+    "https://praana-lbp-maingoal.netlify.app",
 ]
 
 
