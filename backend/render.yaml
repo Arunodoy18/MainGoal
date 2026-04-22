@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: praana-lbp-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python model.py
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT

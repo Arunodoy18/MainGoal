@@ -1,0 +1,18 @@
+[
+  "Age",
+  "BMI",
+  "Sex_enc",
+  "Pfirrmann_Grade",
+  "Proteoglycan loss_Score",
+  "Cell_Cluster_Score",
+  "Tears/fissure_Score",
+  "BloodVessels_Score",
+  "Inflammatory cells_Score",
+  "Mean_OD_y",
+  "Largest_Fissure_MajorAxis_um",
+  "Nuclei_Count_y",
+  "TISSUE_Area_Fraction",
+  "HARM_GLCM_Entropy",
+  "HARM_GLCM_Contrast",
+  "TISSUE_GLCM_Entropy"
+]
