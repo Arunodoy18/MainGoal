@@ -30,6 +30,11 @@ Ensure you have the following installed on your machine:
    cp .env.example .env
    ```
 2. **Critical Step**: Open `.env` and fill out your `GROQ_API_KEY`. (Get one for free at [GroqCloud](https://console.groq.com)).
+3. (Optional but recommended) Set the model variables used for clinician explanation:
+   ```bash
+   GROQ_MODEL=llama-3.1-8b-instant
+   GROQ_MODEL_FALLBACKS=llama-3.3-70b-versatile,mixtral-8x7b-32768
+   ```
 
 ### 3. Install Backend Dependencies & Train Model
 1. Navigate to the `backend/` directory:

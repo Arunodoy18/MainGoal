@@ -16,6 +16,12 @@ SYSTEM_PROMPT = (
 
 REQUIRED_KEYS = ["patient_summary", "prediction_reason", "next_steps"]
 
+DEFAULT_GROQ_MODELS = [
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+    "mixtral-8x7b-32768",
+]
+
 
 def _default_response(error_message: str) -> Dict[str, str]:
     return {
@@ -54,6 +60,21 @@ def _extract_json_object(raw_text: str) -> Dict[str, Any]:
     return parsed
 
 
+def _candidate_groq_models() -> List[str]:
+    preferred = os.getenv("GROQ_MODEL", "").strip()
+    env_fallbacks = [
+        model.strip()
+        for model in os.getenv("GROQ_MODEL_FALLBACKS", "").split(",")
+        if model.strip()
+    ]
+
+    ordered: List[str] = []
+    for model in [preferred, *env_fallbacks, *DEFAULT_GROQ_MODELS]:
+        if model and model not in ordered:
+            ordered.append(model)
+    return ordered
+
+
 def explain_prediction(
     patient_dict: Dict[str, Any],
     prediction: int,
@@ -85,25 +106,38 @@ def explain_prediction(
 
     try:
         client = Groq(api_key=api_key)
-        completion = client.chat.completions.create(
-            model="llama3-3b-8192",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.2,
-            max_completion_tokens=500,
-        )
+        last_error: Exception | None = None
 
-        content = completion.choices[0].message.content or ""
-        parsed = _extract_json_object(content)
+        for model_name in _candidate_groq_models():
+            try:
+                completion = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.2,
+                    max_completion_tokens=500,
+                )
 
-        normalized = {key: str(parsed.get(key, "")).strip() for key in REQUIRED_KEYS}
-        if any(not normalized[key] for key in REQUIRED_KEYS):
-            missing = [key for key in REQUIRED_KEYS if not normalized[key]]
-            raise ValueError(f"Missing required keys in LLM response: {missing}")
+                content = completion.choices[0].message.content or ""
+                parsed = _extract_json_object(content)
 
-        return normalized
+                normalized = {key: str(parsed.get(key, "")).strip() for key in REQUIRED_KEYS}
+                if any(not normalized[key] for key in REQUIRED_KEYS):
+                    missing = [key for key in REQUIRED_KEYS if not normalized[key]]
+                    raise ValueError(f"Missing required keys in LLM response: {missing}")
+
+                return normalized
+            except Exception as exc:
+                last_error = exc
+
+        if last_error is not None:
+            return _default_response(
+                f"No configured Groq model succeeded. Last error: {last_error}"
+            )
+
+        return _default_response("No Groq models configured")
     except Exception as exc:
         return _default_response(str(exc))
 
