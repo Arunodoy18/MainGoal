@@ -25,12 +25,24 @@ FEATURE_LIST_PATH = Path(__file__).resolve().parent / "feature_list.json"
 DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "Master_Table_FAST_MINIMAL.xlsx"
 DATA_SHEET = "Master_FAST"
 
-origins = [
+DEFAULT_CORS_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://praana-lbp.netlify.app",  # your actual Netlify URL
+    "https://praana-lbp.netlify.app",
     "https://praana-lbp-maingoal.netlify.app",
 ]
+
+
+def resolve_cors_origins() -> List[str]:
+    raw_origins = os.getenv("CORS_ORIGINS", "").strip()
+    if not raw_origins:
+        return DEFAULT_CORS_ORIGINS
+
+    parsed = [origin.strip().rstrip("/") for origin in raw_origins.split(",") if origin.strip()]
+    return parsed or DEFAULT_CORS_ORIGINS
+
+
+origins = resolve_cors_origins()
 
 
 @asynccontextmanager

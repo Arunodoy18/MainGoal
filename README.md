@@ -76,3 +76,24 @@ npm run dev
 *(The frontend should start on `http://localhost:5173`)*
 
 Visit `http://localhost:5173` in your browser. Click **Start Diagnosis** to input clinical biomarkers and view prediction results!
+
+## One-Command Local E2E (Windows)
+
+From the repository root, run:
+
+```powershell
+.\run-local.ps1
+```
+
+This launches backend and frontend in separate PowerShell windows with:
+- Backend: `http://127.0.0.1:8000`
+- Frontend: `http://127.0.0.1:5173`
+
+## Live Deployment
+
+- Frontend (Netlify): `https://praana-lbp-maingoal.netlify.app`
+- Backend (Render): `https://maingoal.onrender.com`
+
+For production, set these environment values:
+- Backend `.env`: `CORS_ORIGINS=https://praana-lbp-maingoal.netlify.app`
+- Frontend `.env`: `VITE_API_URL=https://maingoal.onrender.com`
