@@ -14,6 +14,8 @@ import shap
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sqlalchemy import Column, Float, Integer, String, create_engine, func
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from llm import explain_prediction
 
@@ -24,6 +26,36 @@ MODEL_PATH = Path(__file__).resolve().parent / "lbp_model.pkl"
 FEATURE_LIST_PATH = Path(__file__).resolve().parent / "feature_list.json"
 DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "Master_Table_FAST_MINIMAL.xlsx"
 DATA_SHEET = "Master_FAST"
+SCREENING_DB_PATH = Path(__file__).resolve().parent / "screening_data.db"
+
+
+def resolve_screening_database_url() -> str:
+    env_database_url = os.getenv("DATABASE_URL", "").strip()
+    if env_database_url:
+        # Some providers use postgres://; SQLAlchemy expects postgresql://
+        if env_database_url.startswith("postgres://"):
+            return env_database_url.replace("postgres://", "postgresql://", 1)
+        return env_database_url
+
+    # Local development fallback
+    return f"sqlite:///{SCREENING_DB_PATH}"
+
+
+SCREENING_DB_URL = resolve_screening_database_url()
+
+
+def ensure_model_artifacts() -> None:
+    if MODEL_PATH.exists() and FEATURE_LIST_PATH.exists():
+        return
+
+    from model import main as train_model_artifacts
+
+    train_model_artifacts()
+
+    if not MODEL_PATH.exists() or not FEATURE_LIST_PATH.exists():
+        raise FileNotFoundError(
+            "Model artifacts were not generated. Expected lbp_model.pkl and feature_list.json"
+        )
 
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:5173",
@@ -31,6 +63,27 @@ DEFAULT_CORS_ORIGINS = [
     "https://praana-lbp.netlify.app",
     "https://praana-lbp-maingoal.netlify.app",
 ]
+
+
+engine_kwargs: Dict[str, Any] = {"pool_pre_ping": True}
+if SCREENING_DB_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+screening_engine = create_engine(SCREENING_DB_URL, **engine_kwargs)
+ScreeningSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=screening_engine)
+ScreeningBase = declarative_base()
+
+
+class ScreeningResponse(ScreeningBase):
+    __tablename__ = "screening_responses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    oswestry_score = Column(Float, nullable=False)
+    vas_score = Column(Integer, nullable=False)
+    severity_label = Column(String(100), nullable=False)
+    patient_age = Column(Integer, nullable=True)
+    patient_sex = Column(String(24), nullable=True)
+    timestamp = Column(String(64), nullable=False)
 
 
 def resolve_cors_origins() -> List[str]:
@@ -52,6 +105,8 @@ async def lifespan(app: FastAPI):
     app.state.explainer = None
     app.state.model_loaded = False
     app.state.startup_error = None
+    app.state.screening_db_ready = False
+    app.state.screening_db_error = None
     
     app.state.dataset_stats = {
         "total_patients": 0,
@@ -60,6 +115,12 @@ async def lifespan(app: FastAPI):
         "region_counts": {},
         "pfirrmann_distribution": {}
     }
+
+    try:
+        ScreeningBase.metadata.create_all(bind=screening_engine)
+        app.state.screening_db_ready = True
+    except Exception as exc:
+        app.state.screening_db_error = str(exc)
 
     try:
         if DATA_FILE.exists():
@@ -80,6 +141,8 @@ async def lifespan(app: FastAPI):
         print(f"Failed to load dataset stats: {exc}")
 
     try:
+        ensure_model_artifacts()
+
         if not MODEL_PATH.exists():
             raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
 
@@ -130,6 +193,15 @@ class PredictionInput(BaseModel):
     harm_entropy: float
     harm_contrast: float
     tissue_entropy: float
+
+
+class ScreeningSubmission(BaseModel):
+    oswestry_score: float = Field(..., ge=0, le=100)
+    vas_score: int = Field(..., ge=0, le=10)
+    severity_label: str = Field(..., min_length=1)
+    timestamp: str = Field(..., min_length=1)
+    patient_age: int | None = Field(default=None, ge=0, le=120)
+    patient_sex: str | None = None
 
 
 def encode_sex(value: str | int) -> int:
@@ -196,25 +268,39 @@ def extract_top_features(explainer: Any, feature_df: pd.DataFrame, feature_list:
 def health_check() -> dict:
     return {
         "status": "ok",
-        "model_loaded": bool(app.state.model_loaded),
+        "model_loaded": bool(getattr(app.state, "model_loaded", False)),
     }
 
 
 @app.get("/dataset-stats")
 def get_dataset_stats() -> dict:
-    return app.state.dataset_stats
+    return getattr(
+        app.state,
+        "dataset_stats",
+        {
+            "total_patients": 0,
+            "pre_op_count": 0,
+            "cadaver_count": 0,
+            "region_counts": {},
+            "pfirrmann_distribution": {},
+        },
+    )
 
 
 @app.post("/predict")
 def predict_surgery_risk(payload: PredictionInput) -> dict:
     try:
-        if not app.state.model_loaded:
-            startup_error = app.state.startup_error or "Model is not loaded"
+        model_loaded = bool(getattr(app.state, "model_loaded", False))
+        if not model_loaded:
+            startup_error = getattr(app.state, "startup_error", None) or "Model is not loaded"
             raise HTTPException(status_code=503, detail=startup_error)
 
-        feature_list = app.state.feature_list
-        model = app.state.model
-        explainer = app.state.explainer
+        feature_list = getattr(app.state, "feature_list", [])
+        model = getattr(app.state, "model", None)
+        explainer = getattr(app.state, "explainer", None)
+
+        if not feature_list or model is None or explainer is None:
+            raise HTTPException(status_code=503, detail="Model state is not ready")
 
         row = build_feature_row(payload, feature_list)
         feature_df = pd.DataFrame([row], columns=feature_list)
@@ -251,3 +337,80 @@ def predict_surgery_risk(payload: PredictionInput) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc
+
+
+@app.post("/api/screening-data")
+def receive_screening_data(payload: ScreeningSubmission) -> dict:
+    if not bool(getattr(app.state, "screening_db_ready", False)):
+        error_detail = getattr(app.state, "screening_db_error", None) or "Screening database is not available"
+        raise HTTPException(status_code=503, detail=error_detail)
+
+    session = ScreeningSessionLocal()
+    try:
+        record = ScreeningResponse(
+            oswestry_score=float(payload.oswestry_score),
+            vas_score=int(payload.vas_score),
+            severity_label=payload.severity_label.strip(),
+            patient_age=payload.patient_age,
+            patient_sex=payload.patient_sex.strip() if payload.patient_sex else None,
+            timestamp=payload.timestamp,
+        )
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+
+        return {
+            "status": "received",
+            "message": "Screening data stored successfully",
+            "record_id": record.id,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to store screening data: {exc}") from exc
+    finally:
+        session.close()
+
+
+@app.get("/api/screening-stats")
+def get_screening_stats() -> dict:
+    if not bool(getattr(app.state, "screening_db_ready", False)):
+        error_detail = getattr(app.state, "screening_db_error", None) or "Screening database is not available"
+        raise HTTPException(status_code=503, detail=error_detail)
+
+    session = ScreeningSessionLocal()
+    try:
+        total_responses = session.query(func.count(ScreeningResponse.id)).scalar() or 0
+        average_oswestry_score = session.query(func.avg(ScreeningResponse.oswestry_score)).scalar()
+        average_vas_score = session.query(func.avg(ScreeningResponse.vas_score)).scalar()
+
+        severity_rows = (
+            session.query(ScreeningResponse.severity_label, func.count(ScreeningResponse.id))
+            .group_by(ScreeningResponse.severity_label)
+            .all()
+        )
+        severity_distribution = {
+            str(label): int(count)
+            for label, count in severity_rows
+        }
+
+        return {
+            "total_responses": int(total_responses),
+            "average_oswestry_score": (
+                round(float(average_oswestry_score), 2)
+                if average_oswestry_score is not None
+                else 0.0
+            ),
+            "severity_distribution": severity_distribution,
+            "average_vas_score": (
+                round(float(average_vas_score), 2)
+                if average_vas_score is not None
+                else 0.0
+            ),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch screening stats: {exc}") from exc
+    finally:
+        session.close()

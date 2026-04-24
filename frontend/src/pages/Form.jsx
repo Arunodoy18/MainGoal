@@ -3,32 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Loader2, AlertTriangle, X } from "lucide-react";
 import axios from "axios";
-
-// Loading Skeleton Component
-function LoadingSkeleton() {
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }} 
-      animate={{ opacity: 1 }} 
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#030812]/90 backdrop-blur-sm"
-    >
-      <div className="relative flex h-32 w-32 items-center justify-center">
-        <div className="absolute h-full w-full animate-spin-slow rounded-full border-4 border-dashed border-accent border-t-transparent"></div>
-        <div className="absolute h-24 w-24 animate-spin-reverse rounded-full border-4 border-dashed border-cyan-400 border-t-transparent"></div>
-        <Loader2 size={40} className="animate-pulse text-white" />
-      </div>
-      <motion.p 
-        animate={{ opacity: [0.5, 1, 0.5] }} 
-        transition={{ repeat: Infinity, duration: 2 }}
-        className="mt-8 text-xl font-semibold tracking-widest text-accent"
-      >
-        ANALYZING BIOMARKERS...
-      </motion.p>
-      <p className="mt-2 text-sm text-muted">Running XGBoost Model & Generating Clinical Insights</p>
-    </motion.div>
-  );
-}
+import LoadingSpinner from "../components/LoadingSpinner";
 
 // Toast Component
 function ErrorToast({ message, onClose }) {
@@ -89,11 +64,17 @@ export default function Form() {
     setLoading(true);
     setError("");
 
+    if (!apiBaseUrl) {
+      setError("API URL is not configured.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await axios.post(`${apiBaseUrl}/predict`, form);
       // Small artificial delay to show loader for UX
       setTimeout(() => {
-        navigate("/results", { state: { result: response.data } });
+        navigate("/doctor/results", { state: { result: response.data } });
       }, 1500);
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
@@ -138,9 +119,9 @@ export default function Form() {
   );
 
   return (
-    <div className="relative min-h-screen bg-[#030812] px-4 py-12 lg:px-20 text-white">
+    <div className="relative min-h-screen bg-bg-primary px-4 py-12 text-text-primary lg:px-20">
       <AnimatePresence>
-        {loading && <LoadingSkeleton />}
+        {loading && <LoadingSpinner overlay label="Analyzing biomarkers..." size="lg" />}
       </AnimatePresence>
       <AnimatePresence>
         {error && <ErrorToast message={error} onClose={() => setError("")} />}
@@ -153,17 +134,20 @@ export default function Form() {
       >
         <button
           onClick={() => navigate("/")}
-          className="mb-8 flex items-center gap-2 text-muted transition hover:text-accent"
+          className="mb-8 flex min-h-11 items-center gap-2 text-text-muted transition hover:text-brand-cyan"
         >
           <ChevronLeft size={20} />
           <span>Back to Home</span>
         </button>
 
-        <div className="card-border rounded-3xl bg-panel/60 p-8 shadow-glow backdrop-blur-xl sm:p-12">
-          <h2 className="mb-2 text-3xl font-bold tracking-tight text-white drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]">
+        <div className="card-border rounded-3xl p-8 shadow-glow backdrop-blur-xl sm:p-12">
+          <div className="mb-6 rounded-xl border border-[#1a2d4a] bg-bg-secondary px-4 py-3 font-mono-display text-xs uppercase tracking-[0.22em] text-text-muted">
+            SMIMS Clinical Portal - Restricted Access
+          </div>
+          <h2 className="font-display mb-2 text-3xl font-bold tracking-tight text-text-primary drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]">
             Patient Diagnosis Form
           </h2>
-          <p className="mb-10 text-muted">Enter clinical biomarkers to predict surgery risk.</p>
+          <p className="mb-10 text-text-muted">Enter clinical biomarkers to predict surgery risk.</p>
 
           {error && (
             <div className="mb-8 rounded-xl bg-red-900/30 p-4 text-sm text-red-200 ring-1 ring-red-500/50">
@@ -233,11 +217,11 @@ export default function Form() {
               whileTap={{ scale: 0.98 }}
               disabled={loading}
               type="submit"
-              className="mt-8 flex w-full items-center justify-center gap-3 rounded-xl bg-accent py-4 text-lg font-bold text-[#030812] shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
+              className="btn-primary mt-8 flex min-h-11 w-full items-center justify-center gap-3 rounded-xl py-4 text-lg font-bold text-black shadow-[0_0_20px_rgba(0,229,255,0.4)] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {loading ? (
                 <>
-                  <Loader2 className="animate-spin text-[#030812]" size={24} />
+                  <Loader2 className="animate-spin text-black" size={24} />
                   <span>Processing...</span>
                 </>
               ) : (

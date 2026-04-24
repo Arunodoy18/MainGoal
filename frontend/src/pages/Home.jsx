@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Activity, Users, FileText, Database } from "lucide-react";
+import { Activity, Users, GaugeCircle, HeartPulse } from "lucide-react";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 function AnimatedCounter({ value, label, icon: Icon }) {
   const [count, setCount] = useState(0);
@@ -40,27 +41,38 @@ function AnimatedCounter({ value, label, icon: Icon }) {
 export default function Home() {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const apiBaseUrl = import.meta.env.VITE_API_URL;
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!apiBaseUrl) {
+        setLoadError("API URL is not configured.");
+        setLoading(false);
+        return;
+      }
+
       try {
-        const response = await axios.get(`${apiBaseUrl}/dataset-stats`);
-        setStats(response.data);
+        const response = await axios.get(`${apiBaseUrl}/api/screening-stats`);
+        setStats(response.data || {});
       } catch (err) {
-        console.error("Failed to load stats", err);
+        setLoadError(err.response?.data?.detail || "Unable to load live stats right now.");
+      } finally {
+        setLoading(false);
       }
     };
+
     fetchStats();
-  }, []);
+  }, [apiBaseUrl]);
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#030812]">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#00E5FF10_1px,transparent_1px),linear-gradient(to_bottom,#00E5FF10_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
-      <div className="absolute inset-0 bg-radial-gradient from-transparent to-[#030812] opacity-80 backdrop-blur-[1px]"></div>
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-bg-primary px-4 py-8">
+      <div className="pointer-events-none fixed -left-16 top-10 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(0,229,255,0.22),transparent_70%)]" />
+      <div className="pointer-events-none fixed -right-20 bottom-8 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(123,94,248,0.2),transparent_70%)]" />
       
       <motion.div 
-        className="relative z-10 flex w-full max-w-4xl flex-col items-center space-y-8 px-4 text-center"
+        className="relative z-10 flex w-full max-w-3xl flex-col items-center space-y-6 text-center"
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
@@ -69,45 +81,63 @@ export default function Home() {
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ delay: 0.3, type: "spring", stiffness: 100 }}
-          className="flex h-24 w-24 items-center justify-center rounded-full bg-secondary/10 text-accent shadow-[0_0_40px_rgba(0,229,255,0.2)] ring-1 ring-accent/30"
+          className="relative flex h-20 w-20 items-center justify-center rounded-full bg-brand-violet/15 text-brand-cyan sm:h-24 sm:w-24"
         >
-          <Activity size={48} strokeWidth={1.5} />
+          <span className="absolute inset-0 animate-ping rounded-full border border-brand-cyan/40" />
+          <Activity size={40} strokeWidth={1.5} />
         </motion.div>
         
-        <h1 className="text-6xl font-black tracking-tight text-white sm:text-8xl drop-shadow-[0_0_25px_rgba(0,229,255,0.4)]">
-          PRAANA LBP
+        <h1 className="font-display text-5xl font-black tracking-tight sm:text-7xl">
+          <span className="bg-gradient-to-r from-brand-cyan to-brand-violet bg-clip-text text-transparent">
+            PRAANA
+          </span>
         </h1>
         
-        <h2 className="text-2xl font-medium tracking-wide text-accent sm:text-3xl">
-          AI-Powered Surgery Prediction for Low Back Pain
+        <h2 className="text-lg font-medium tracking-wide text-text-primary sm:text-2xl">
+          Your first step for understanding back pain
         </h2>
         
-        <p className="max-w-2xl text-lg leading-relaxed text-muted sm:text-xl">
-          Built on real SMIMS clinical data — Northeast India's first disc degeneration AI.
+        <p className="max-w-xl text-base leading-relaxed text-text-muted sm:text-lg">
+          Answer a few simple questions and get a calm, clear summary you can share with your doctor.
         </p>
         
         <motion.button
-          whileHover={{ scale: 1.05, boxShadow: "0 0 45px rgba(0,229,255,0.5)" }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => navigate("/form")}
-          className="mt-8 rounded-full bg-accent px-12 py-5 text-xl font-bold tracking-wide text-[#030812] shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-all hover:bg-cyan-300"
+          whileHover={{ scale: 1.03, boxShadow: "0 0 45px rgba(0,229,255,0.45)" }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => navigate("/screening")}
+          className="btn-primary mt-4 min-h-11 w-full max-w-md rounded-xl px-8 py-4 text-lg font-bold tracking-wide text-black"
         >
-          Start Diagnosis
+          Check My Back Pain
         </motion.button>
         
-        {stats && stats.total_patients > 0 && (
+        {loading && <LoadingSpinner label="Loading live screening stats..." size="sm" />}
+
+        {!loading && !loadError && stats && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
-            className="mt-16 grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3"
+            className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3"
           >
-            <AnimatedCounter value={stats.total_patients} label="Total Cases" icon={Database} />
-            <AnimatedCounter value={stats.pre_op_count} label="Pre-Op Labels" icon={Users} />
-            <AnimatedCounter value={stats.cadaver_count} label="Cadaver Labels" icon={FileText} />
+            <AnimatedCounter value={stats.total_responses || 0} label="Patients Screened" icon={Users} />
+            <AnimatedCounter value={Math.round(stats.average_oswestry_score || 0)} label="Avg Back Impact" icon={GaugeCircle} />
+            <AnimatedCounter value={Math.round(stats.average_vas_score || 0)} label="Avg Pain Score" icon={HeartPulse} />
           </motion.div>
         )}
+
+        {!loading && loadError && (
+          <div className="mt-6 rounded-xl border border-brand-red/40 bg-brand-red/10 px-4 py-3 text-sm text-brand-red">
+            {loadError}
+          </div>
+        )}
       </motion.div>
+
+      <button
+        onClick={() => navigate("/doctor")}
+        className="absolute bottom-6 text-sm text-text-muted transition hover:text-brand-cyan"
+      >
+        Clinical Portal -&gt;
+      </button>
     </div>
   );
 }

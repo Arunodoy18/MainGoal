@@ -17,7 +17,7 @@ SYSTEM_PROMPT = (
 REQUIRED_KEYS = ["patient_summary", "prediction_reason", "next_steps"]
 
 DEFAULT_GROQ_MODELS = [
-    "llama-3.1-8b-instant",
+    "llama3-3b-8192",
     "llama-3.3-70b-versatile",
     "mixtral-8x7b-32768",
 ]
@@ -28,7 +28,7 @@ def _default_response(error_message: str) -> Dict[str, str]:
         "patient_summary": "Clinical summary unavailable due to an internal processing issue. "
         "Please review patient variables directly in the report.",
         "prediction_reason": "AI explanation could not be generated from the current model output. "
-        f"Please retry after resolving: {error_message}",
+        "Please retry shortly or continue with clinician interpretation.",
         "next_steps": "Correlate this output with imaging, neurological examination, and patient-reported symptoms. "
         "Use final management decisions only after clinician review.",
     }

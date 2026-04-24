@@ -10,3 +10,5 @@ groq
 python-dotenv
 numpy
 matplotlib
+sqlalchemy
+psycopg2-binary

@@ -23,3 +23,7 @@ Thumbs.db
 
 # Model artifacts
 backend/artifacts/
+# Local Netlify folder
+.netlify
+# Local screening DB fallback
+backend/screening_data.db
