@@ -127,8 +127,6 @@ const sections = [
   },
 ];
 
-const vasFaces = ["😊", "🙂", "🙂", "😐", "😕", "😣", "😣", "😫", "😫", "😖", "😣"];
-
 function getVasVisualMeta(value) {
   if (value <= 2) {
     return { color: "#00FF9D", label: "Minimal" };
@@ -208,6 +206,21 @@ export default function Screening() {
     const sumScore = Object.values(answers).reduce((sum, value) => sum + Number(value || 0), 0);
     const oswestryPercent = (sumScore / 45) * 100;
     const severityMeta = getSeverityMeta(oswestryPercent);
+    const sectionScores = sections.map((section) => ({
+      name: section.title,
+      score: Number(answers[section.key] ?? 0),
+    }));
+
+    const highestSectionScore = Math.max(...sectionScores.map((item) => item.score));
+    const topSections =
+      highestSectionScore > 0
+        ? sectionScores.filter((item) => item.score === highestSectionScore).map((item) => item.name)
+        : [];
+
+    const mostAffectedSections = sectionScores
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
 
     let saveWarning = "";
     if (apiBaseUrl) {
@@ -229,7 +242,9 @@ export default function Screening() {
       sumScore,
       vasScore,
       oswestryPercent,
-      emoji: vasFaces[vasScore],
+      topSections,
+      mostAffectedSections,
+      sectionScores,
       ...severityMeta,
       saveWarning,
     };
