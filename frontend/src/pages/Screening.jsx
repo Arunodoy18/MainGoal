@@ -129,6 +129,22 @@ const sections = [
 
 const vasFaces = ["😊", "🙂", "🙂", "😐", "😕", "😣", "😣", "😫", "😫", "😖", "😣"];
 
+function getVasVisualMeta(value) {
+  if (value <= 2) {
+    return { color: "#00FF9D", label: "Minimal" };
+  }
+  if (value <= 4) {
+    return { color: "#FFD700", label: "Mild" };
+  }
+  if (value <= 6) {
+    return { color: "#FFA500", label: "Moderate" };
+  }
+  if (value <= 8) {
+    return { color: "#FF4D6D", label: "Severe" };
+  }
+  return { color: "#CC0000", label: "Critical" };
+}
+
 function getSeverityMeta(score) {
   if (score <= 20) {
     return {
@@ -179,6 +195,7 @@ export default function Screening() {
   const [vasScore, setVasScore] = useState(0);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const vasVisualMeta = getVasVisualMeta(vasScore);
 
   const totalSteps = sections.length + 1;
   const isVasStep = currentStep === sections.length;
@@ -342,9 +359,21 @@ export default function Screening() {
                   onChange={(event) => setVasScore(Number(event.target.value))}
                   className="h-2 w-full cursor-pointer appearance-none rounded-full bg-gradient-to-r from-brand-cyan/50 to-brand-violet/60 accent-brand-cyan"
                 />
-                <div className="mt-4 flex items-center justify-between rounded-xl border border-[#1a2d4a] bg-bg-primary px-4 py-3">
-                  <span className="text-3xl">{vasFaces[vasScore]}</span>
-                  <span className="font-mono-display text-4xl text-brand-cyan">{vasScore}</span>
+                <div className="mt-4 rounded-xl border border-[#1a2d4a] bg-bg-primary px-4 py-5">
+                  <div className="flex flex-col items-center justify-center">
+                    <span
+                      className="font-mono-display text-5xl font-bold transition-colors duration-300"
+                      style={{ color: vasVisualMeta.color }}
+                    >
+                      {vasScore}
+                    </span>
+                    <span
+                      className="mt-1 text-sm font-semibold uppercase tracking-[0.16em] transition-colors duration-300"
+                      style={{ color: vasVisualMeta.color }}
+                    >
+                      {vasVisualMeta.label}
+                    </span>
+                  </div>
                 </div>
               </div>
             </motion.section>
